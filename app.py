@@ -7,8 +7,8 @@ import faiss
 import numpy as np
 import io, hashlib
 
-st.set_page_config(page_title="RAG PDF Chat (offline)", layout="wide")
-st.title("📚 RAG Chat - 2 PDFs (100% grátis, roda no Streamlit Cloud)")
+st.set_page_config(page_title="TCC NLP", layout="wide")
+st.title("📚 Chat - Teste inicial rodando no Streamlit Cloud)")
 
 # ---------- Helpers ----------
 def chunk_text(text, chunk_size=500, overlap=100):
@@ -42,7 +42,7 @@ embed_model = load_sentence_model()
 gen_pipe = load_generation_pipeline()
 
 # ---------- Upload PDFs ----------
-uploaded = st.file_uploader("Carregue até 2 PDFs", type="pdf", accept_multiple_files=True)
+uploaded = st.file_uploader("Carregue PDFs", type="pdf", accept_multiple_files=True)
 if uploaded:
     # read bytes & compute a cache key (to avoid recomputing se mesmo arquivo)
     all_text = ""
@@ -95,4 +95,4 @@ if uploaded:
         st.markdown(f"**Você:** {q}")
         st.markdown(f"**Bot:** {a}")
 else:
-    st.info("Carregue 1 ou 2 PDFs para começar. Recomendo usar PDFs curtos (ex.: até algumas dezenas de páginas).")
+    st.info("Carregue PDFs para começar. Recomendo usar PDFs curtos (ex.: até algumas dezenas de páginas).")
