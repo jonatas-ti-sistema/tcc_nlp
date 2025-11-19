@@ -11,8 +11,8 @@ st.title("📚 Chat - Teste inicial rodando no Streamlit Cloud")
 
 
 # ---------- Helpers ----------
-# MELHORIA PRO PERFIL: ajuste de chunking, atual 300/70
-def chunk_text(text, chunk_size=300, overlap=70):
+# MELHORIA PRO PERFIL: ajuste de chunking, atual 100/50
+def chunk_text(text, chunk_size=100, overlap=50):
     words = text.split()
     chunks = []
     i = 0
@@ -113,7 +113,7 @@ if index_ready:
                 q_emb = embed_model.encode([prompt_user], convert_to_numpy=True)
                 # MELHORIA PRO PERFIL: top-k ajustar
                 # k=3 : soma textos caiba 512 tokens / pra dar um pouco mais de contexto
-                D, Idx = st.session_state["index"].search(q_emb, k=3)
+                D, Idx = st.session_state["index"].search(q_emb, k=6)
                 top_idxs = Idx[0].tolist()
 
                 context_chunks = [
@@ -130,7 +130,7 @@ if index_ready:
                 try:
                     output = gen_pipe(
                         final_prompt,
-                        max_new_tokens=300,
+                        max_new_tokens=500,
                         do_sample=False,  # Deterministico (sempre a mesma resposta para a mesma pergunta)
                         truncation=True,
                     )
