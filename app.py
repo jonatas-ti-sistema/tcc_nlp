@@ -17,7 +17,7 @@ st.title("📚 Chat - Teste inicial rodando no Streamlit Cloud")
 LOG_FILE = "chat_log.csv"
 token = st.secrets["GITHUB_TOKEN"]
 repo_name = st.secrets["REPO_NAME"]
-
+# MELHORIA PRO PERFIL: ajuste de chunking, atual 100/50
 chunk_size = 100
 overlap = 50
 
@@ -62,7 +62,12 @@ def log_interaction_github(question, response, context, time_taken, accuracy):
         clean_response = response.replace("\n", " ").replace("\r", "").replace("|", "")
         clean_context = context.replace("\n", " ").replace("\r", "").replace("|", "")
 
-        new_line = f"{timestamp}|{clean_question}|{clean_response}|{clean_context}|{time_taken:.2f}|{accuracy:.2f}%"
+        if isinstance(accuracy, (int, float)):
+            accuracy_str = f"{accuracy:.2f}%"
+        else:
+            accuracy_str = str(accuracy)
+
+        new_line = f"{timestamp}|{clean_question}|{clean_response}|{clean_context}|{time_taken:.2f}|{accuracy_str}"
 
         # 4. Tentar pegar o arquivo existente e atualizar
         try:
@@ -86,7 +91,7 @@ def log_interaction_github(question, response, context, time_taken, accuracy):
         except GithubException as e:
             # Se o arquivo não for encontrado (404), cria ele
             if e.status == 404:
-                header = "Timestamp|Pergunta|Resposta|Contexto_Usado|Tempo_Segundos\n"
+                header = "Timestamp|Pergunta|Resposta|Contexto_Usado|Tempo_Segundos|Acuracia\n"
                 create_content = header + new_line
                 repo.create_file(
                     path=file_path,
@@ -102,7 +107,6 @@ def log_interaction_github(question, response, context, time_taken, accuracy):
 
 
 # ---------- Helpers ----------
-# MELHORIA PRO PERFIL: ajuste de chunking, atual 100/50
 def chunk_text(text, chunk_size=100, overlap=50):
     words = text.split()
     chunks = []
@@ -162,11 +166,13 @@ def load_models():
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 
     pipe = pipeline("text2text-generation", model=model, tokenizer=tokenizer, device=-1)
+    st.session_state['embedding_dim'] = 384  # Dimensão do all-MiniLM-L6-v2
     return embed_model, pipe
 
 
 embed_model, gen_pipe = load_models()
 st.session_state.embed_model = embed_model
+dim = st.session_state['embedding_dim']
 
 # ---------- 3. Sidebar & Upload ----------
 with st.sidebar:
@@ -208,7 +214,7 @@ if uploaded:
                 )
 
                 # Cria Index FAISS
-                dim = embeddings.shape[1]
+                # dim = embeddings.shape[1]
                 index = faiss.IndexFlatL2(dim)
                 index.add(embeddings)
 
@@ -328,12 +334,14 @@ if index_ready:
 
                 st.markdown(response_text)
 
-                with st.expander(f"🕵️‍♂️ Detalhes da Execução (Tempo: {elapsed_time:.2f}s)"):
+                with st.expander(
+                    f"🕵️‍♂️ Detalhes da Execução (Tempo: {elapsed_time:.2f}s)"
+                ):
                     st.markdown(f"**{accuracy_text}**")
                     st.markdown("---")
                     st.markdown("**Contexto Usado:**")
                     st.write(context_text)
-                    if 'expected_response' in locals():
+                    if "expected_response" in locals():
                         st.markdown("**Resposta Esperada (Validação):**")
                         st.write(expected_response)
 
