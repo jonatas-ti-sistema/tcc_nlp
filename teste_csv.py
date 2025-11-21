@@ -17,8 +17,8 @@ dummy_data = [
 ]
 
 # Criar o arquivo
-with open(filename, mode='w', newline='', encoding='utf-8') as f:
-    writer = csv.writer(f)
+with open(filename, mode='w', newline='\n', encoding='utf-8') as f:
+    writer = csv.writer(f, delimiter='|')
     writer.writerow(header)      # Escreve o cabeçalho
     writer.writerow(dummy_data)  # Escreve uma linha de teste
 

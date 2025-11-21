@@ -1,33 +1,81 @@
+import os
+import io
+import time
+import faiss
+import hashlib
 import streamlit as st
 from PyPDF2 import PdfReader
 from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
-import faiss
-import io
-import hashlib
-import csv
-import time
-import os
 from datetime import datetime
+from github import Github, GithubException
+
 
 st.set_page_config(page_title="TCC NLP", layout="wide")
 st.title("📚 Chat - Teste inicial rodando no Streamlit Cloud")
 
 LOG_FILE = "chat_log.csv"
 
-def log_interaction(question, response, context, time_taken):
-    # Verifica se o arquivo já existe para decidir se escreve o cabeçalho
-    file_exists = os.path.isfile(LOG_FILE)
-    
-    with open(LOG_FILE, mode='a', newline='', encoding='utf-8') as f:
-        writer = csv.writer(f)
-        # Se é arquivo novo, escreve o cabeçalho
-        if not file_exists:
-            writer.writerow(["Timestamp", "Pergunta", "Resposta", "Contexto_Usado", "Tempo_Segundos"])
-            
-        # Escreve os dados da interação atual
+chunk_size=100
+overlap=50
+
+def log_interaction_github(question, response, context, time_taken):
+    # 1. Recuperar as credenciais dos Secrets
+    token = st.secrets["GITHUB_TOKEN"]
+    repo_name = st.secrets["REPO_NAME"]
+    file_path = st.secrets["FILE_PATH"]
+
+    try:
+        # 2. Conectar ao GitHub
+        g = Github(token)
+        repo = g.get_repo(repo_name)
+
+        # 3. Preparar a nova linha
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        writer.writerow([timestamp, question, response, context, f"{time_taken:.2f}"])
+
+        # Limpeza simples para não quebrar a estrutura do Pipe "|"
+        clean_question = question.replace("\n", " ").replace("\r", "").replace("|", "")
+        clean_response = response.replace("\n", " ").replace("\r", "").replace("|", "")
+        clean_context = context.replace("\n", " ").replace("\r", "").replace("|", "")
+
+        new_line = f"{timestamp}|{clean_question}|{clean_response}|{clean_context}|{time_taken:.2f}"
+
+        # 4. Tentar pegar o arquivo existente e atualizar
+        try:
+            contents = repo.get_contents(file_path)
+            csv_content = contents.decoded_content.decode("utf-8")
+
+            # Garante que haja uma quebra de linha antes de adicionar o novo registro
+            if csv_content and not csv_content.endswith("\n"):
+                csv_content += "\n"
+
+            updated_content = csv_content + new_line
+
+            repo.update_file(
+                path=contents.path,
+                message=f"Log update: {timestamp}",
+                content=updated_content,
+                sha=contents.sha,
+            )
+            st.toast("Log salvo no GitHub com sucesso!", icon="☁️")
+
+        except GithubException as e:
+            # Se o arquivo não for encontrado (404), cria ele
+            if e.status == 404:
+                header = "Timestamp|Pergunta|Resposta|Contexto_Usado|Tempo_Segundos\n"
+                create_content = header + new_line
+                repo.create_file(
+                    path=file_path,
+                    message=f"Create log file: {timestamp}",
+                    content=create_content,
+                )
+                st.toast("Arquivo criado e salvo no GitHub!", icon="✨")
+            else:
+                raise e
+
+    except Exception as e:
+        st.error(f"Erro ao salvar no GitHub: {e}")
+
 
 # ---------- Helpers ----------
 # MELHORIA PRO PERFIL: ajuste de chunking, atual 100/50
@@ -73,15 +121,7 @@ with st.sidebar:
         "Carregue seus PDFs aqui", type="pdf", accept_multiple_files=True
     )
     st.sidebar.markdown("---")
-    st.sidebar.header("📊 Logs de Auditoria")
-    if os.path.exists(LOG_FILE):
-        with open(LOG_FILE, "rb") as f:
-            st.sidebar.download_button(
-                label="📥 Baixar Logs da Conversa (CSV)",
-                data=f,
-                file_name="historico_tcc.csv",
-                mime="text/csv"
-            )
+    st.sidebar.info("Os logs estão sendo salvos automaticamente no GitHub.")
 index_ready = False
 
 if uploaded:
@@ -98,12 +138,9 @@ if uploaded:
     cache_key = "_".join(hashes)
 
     # ---------- 4. Processamento (Indexação) ----------
-    if (
-        "index_key" not in st.session_state
-        or st.session_state["index_key"] != cache_key
-    ):
+    if "index_key" not in st.session_state or st.session_state["index_key"] != cache_key:
         with st.spinner("⚙️ Processando PDFs e criando memória vetorial..."):
-            chunks = chunk_text(all_text, chunk_size=200, overlap=50)
+            chunks = chunk_text(all_text, chunk_size, overlap)
 
             if chunks:
                 # Cria embeddings
@@ -141,10 +178,9 @@ if index_ready:
 
         with st.chat_message("assistant"):
             with st.spinner("Lendo documentos e formulando resposta..."):
-                
                 # --- INICIO DA CONTAGEM DE TEMPO ---
                 start_time = time.time()
-                
+
                 q_emb = embed_model.encode([prompt_user], convert_to_numpy=True)
                 D, Idx = st.session_state["index"].search(q_emb, k=6)
                 top_idxs = Idx[0].tolist()
@@ -173,11 +209,12 @@ if index_ready:
                 end_time = time.time()
                 elapsed_time = end_time - start_time
 
-                # --- SALVAR LOG ---
-                log_interaction(prompt_user, response_text, context_text, elapsed_time)
-                
-                # Adicione esta linha para confirmar visualmente que salvou:
-                st.toast("Log salvo com sucesso!", icon="💾") 
+                # --- SALVAR LOG NO GITHUB ---
+                with st.spinner("Salvando registro na nuvem..."):
+                    log_interaction_github(
+                        prompt_user, response_text, context_text, elapsed_time
+                    )
+                st.toast("Log salvo com sucesso!", icon="💾")
 
                 st.markdown(response_text)
 
