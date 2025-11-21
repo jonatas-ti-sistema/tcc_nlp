@@ -1,9 +1,9 @@
-import os
 import io
 import time
 import faiss
 import hashlib
 import streamlit as st
+import pandas as pd
 from PyPDF2 import PdfReader
 from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
@@ -15,18 +15,42 @@ st.set_page_config(page_title="TCC NLP", layout="wide")
 st.title("📚 Chat - Teste inicial rodando no Streamlit Cloud")
 
 LOG_FILE = "chat_log.csv"
+token = st.secrets["GITHUB_TOKEN"]
+repo_name = st.secrets["REPO_NAME"]
 
-chunk_size=100
-overlap=50
+chunk_size = 100
+overlap = 50
 
-def log_interaction_github(question, response, context, time_taken):
-    # 1. Recuperar as credenciais dos Secrets
-    token = st.secrets["GITHUB_TOKEN"]
-    repo_name = st.secrets["REPO_NAME"]
+
+def get_questions_dataset_github():
+    file_path = "set_perguntas_respostas.csv"
+
+    try:
+        g = Github(token)
+        repo = g.get_repo(repo_name)
+        contents = repo.get_contents(file_path)
+        csv_content = contents.decoded_content.decode("utf-8")
+        df = pd.read_csv(io.StringIO(csv_content), sep="|")
+        st.toast("Dataset de validação carregado!", icon="✔️")
+        return df
+
+    except GithubException as e:
+        if e.status == 404:
+            st.warning(
+                "Arquivo 'set_perguntas_respostas.csv' não encontrado no repositório. Acurácia desabilitada."
+            )
+        else:
+            st.error(f"Erro ao carregar o dataset de validação do GitHub: {e}")
+        return None
+    except Exception as e:
+        st.error(f"Erro inesperado ao processar o dataset de validação: {e}")
+        return None
+
+
+def log_interaction_github(question, response, context, time_taken, accuracy):
     file_path = st.secrets["FILE_PATH"]
 
     try:
-        # 2. Conectar ao GitHub
         g = Github(token)
         repo = g.get_repo(repo_name)
 
@@ -38,7 +62,7 @@ def log_interaction_github(question, response, context, time_taken):
         clean_response = response.replace("\n", " ").replace("\r", "").replace("|", "")
         clean_context = context.replace("\n", " ").replace("\r", "").replace("|", "")
 
-        new_line = f"{timestamp}|{clean_question}|{clean_response}|{clean_context}|{time_taken:.2f}"
+        new_line = f"{timestamp}|{clean_question}|{clean_response}|{clean_context}|{time_taken:.2f}|{accuracy:.2f}%"
 
         # 4. Tentar pegar o arquivo existente e atualizar
         try:
@@ -94,6 +118,35 @@ def file_hash_bytes(b: bytes):
     return hashlib.md5(b).hexdigest()
 
 
+def calculate_accuracy(generated_response_emb, expected_response_emb):
+    """
+    Calcula a acurácia (similaridade cosseno) entre a resposta gerada e a resposta esperada.
+
+    A similaridade cosseno varia de -1 (oposto) a 1 (idêntico).
+    Vamos normalizar para 0% (totalmente diferente/oposto) a 100% (idêntico).
+    Fórmula: (sim_cosseno + 1) / 2 * 100
+    """
+    # Produto escalar (numerador)
+    dot_product = generated_response_emb.dot(expected_response_emb)
+    # Normas (denominador)
+    norm_gen = st.session_state.embed_model.util.numpy_linalg.norm(
+        generated_response_emb
+    )
+    norm_exp = st.session_state.embed_model.util.numpy_linalg.norm(
+        expected_response_emb
+    )
+
+    if norm_gen == 0 or norm_exp == 0:
+        return 0.0  # Evita divisão por zero
+
+    cosine_similarity = dot_product / (norm_gen * norm_exp)
+
+    # Normaliza de [-1, 1] para [0, 1] e converte para porcentagem [0%, 100%]
+    accuracy = ((cosine_similarity + 1) / 2) * 100
+
+    return accuracy
+
+
 # ---------- 2. Load Models (Cache) ----------
 @st.cache_resource
 def load_models():
@@ -113,6 +166,7 @@ def load_models():
 
 
 embed_model, gen_pipe = load_models()
+st.session_state.embed_model = embed_model
 
 # ---------- 3. Sidebar & Upload ----------
 with st.sidebar:
@@ -120,6 +174,8 @@ with st.sidebar:
     uploaded = st.file_uploader(
         "Carregue seus PDFs aqui", type="pdf", accept_multiple_files=True
     )
+    if "validation_data" not in st.session_state:
+        st.session_state["validation_data"] = get_questions_dataset_github()
     st.sidebar.markdown("---")
     st.sidebar.info("Os logs estão sendo salvos automaticamente no GitHub.")
 index_ready = False
@@ -138,7 +194,10 @@ if uploaded:
     cache_key = "_".join(hashes)
 
     # ---------- 4. Processamento (Indexação) ----------
-    if "index_key" not in st.session_state or st.session_state["index_key"] != cache_key:
+    if (
+        "index_key" not in st.session_state
+        or st.session_state["index_key"] != cache_key
+    ):
         with st.spinner("⚙️ Processando PDFs e criando memória vetorial..."):
             chunks = chunk_text(all_text, chunk_size, overlap)
 
@@ -182,7 +241,8 @@ if index_ready:
                 start_time = time.time()
 
                 q_emb = embed_model.encode([prompt_user], convert_to_numpy=True)
-                D, Idx = st.session_state["index"].search(q_emb, k=6)
+                # MELHORIA PRO PERFIL: ajuste do k
+                D, Idx = st.session_state["index"].search(q_emb, k=4)
                 top_idxs = Idx[0].tolist()
 
                 context_chunks = [
@@ -209,17 +269,73 @@ if index_ready:
                 end_time = time.time()
                 elapsed_time = end_time - start_time
 
+                # --- CALCULO DE ACURACIA ---
+                accuracy = 0.0  # Valor padrão se o dataset não for encontrado
+                if st.session_state.validation_data is not None:
+                    validation_df = st.session_state.validation_data
+
+                    # 3. Busca pela Pergunta Mais Próxima no Dataset de Validação
+                    # Codifica todas as perguntas do dataset (cached)
+                    if "validation_embeddings" not in st.session_state:
+                        st.session_state["validation_embeddings"] = embed_model.encode(
+                            validation_df["Pergunta"].tolist(), convert_to_numpy=True
+                        )
+                        st.session_state["validation_index"] = faiss.IndexFlatL2(dim)
+                        st.session_state["validation_index"].add(
+                            st.session_state["validation_embeddings"]
+                        )
+
+                    # Busca a pergunta mais próxima do usuário no index de validação
+                    D_val, Idx_val = st.session_state["validation_index"].search(
+                        q_emb, k=1
+                    )
+                    closest_q_idx = Idx_val[0][0]
+                    closest_q_distance = D_val[0][0]
+
+                    # Decidimos usar a resposta de validação apenas se a pergunta for MUITO próxima (baixa distância FAISS)
+                    # Um valor de 0.5 (arbitrário, pode ser ajustado) é um bom ponto de partida.
+                    # Se a distância for muito grande, a comparação de acurácia não faz sentido.
+                    if closest_q_distance < 0.5:
+                        expected_response = validation_df.iloc[closest_q_idx][
+                            "Resposta"
+                        ]
+
+                        # 4. Cálculo da Similaridade entre Respostas (Acurácia)
+                        generated_emb = embed_model.encode(
+                            [response_text], convert_to_numpy=True
+                        )[0]
+                        expected_emb = embed_model.encode(
+                            [expected_response], convert_to_numpy=True
+                        )[0]
+
+                        accuracy = calculate_accuracy(generated_emb, expected_emb)
+
+                        accuracy_text = f"**Acurácia**: {accuracy:.2f}% (Comparado com pergunta #{closest_q_idx})"
+                    else:
+                        accuracy_text = "Acurácia não calculada (Pergunta do usuário não muito próxima do dataset de validação)."
+
+                else:
+                    accuracy_text = (
+                        "Acurácia não calculada (Dataset de validação não carregado)."
+                    )
+
                 # --- SALVAR LOG NO GITHUB ---
                 with st.spinner("Salvando registro na nuvem..."):
                     log_interaction_github(
-                        prompt_user, response_text, context_text, elapsed_time
+                        prompt_user, response_text, context_text, elapsed_time, accuracy
                     )
                 st.toast("Log salvo com sucesso!", icon="💾")
 
                 st.markdown(response_text)
 
-                with st.expander(f"🕵️‍♂️ Ver trechos usados (Tempo: {elapsed_time:.2f}s)"):
+                with st.expander(f"🕵️‍♂️ Detalhes da Execução (Tempo: {elapsed_time:.2f}s)"):
+                    st.markdown(f"**{accuracy_text}**")
+                    st.markdown("---")
+                    st.markdown("**Contexto Usado:**")
                     st.write(context_text)
+                    if 'expected_response' in locals():
+                        st.markdown("**Resposta Esperada (Validação):**")
+                        st.write(expected_response)
 
         st.session_state.messages.append(
             {"role": "assistant", "content": response_text}
