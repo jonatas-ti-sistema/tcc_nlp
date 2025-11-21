@@ -5,10 +5,29 @@ from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
 import faiss
 import io
 import hashlib
+import csv
+import time
+import os
+from datetime import datetime
 
 st.set_page_config(page_title="TCC NLP", layout="wide")
 st.title("📚 Chat - Teste inicial rodando no Streamlit Cloud")
 
+LOG_FILE = "chat_log.csv"
+
+def log_interaction(question, response, context, time_taken):
+    # Verifica se o arquivo já existe para decidir se escreve o cabeçalho
+    file_exists = os.path.isfile(LOG_FILE)
+    
+    with open(LOG_FILE, mode='a', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        # Se é arquivo novo, escreve o cabeçalho
+        if not file_exists:
+            writer.writerow(["Timestamp", "Pergunta", "Resposta", "Contexto_Usado", "Tempo_Segundos"])
+            
+        # Escreve os dados da interação atual
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        writer.writerow([timestamp, question, response, context, f"{time_taken:.2f}"])
 
 # ---------- Helpers ----------
 # MELHORIA PRO PERFIL: ajuste de chunking, atual 100/50
@@ -31,6 +50,8 @@ def file_hash_bytes(b: bytes):
 @st.cache_resource
 def load_models():
     # Carrega Embeddings
+    # melhoria pro perfil: escolha do modelo de embedding
+    # embed_model = SentenceTransformer("all-MiniLM-L6-v2")
     embed_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
     # MELHORIA PRO PERFIL: escolha do LLM
@@ -51,6 +72,16 @@ with st.sidebar:
     uploaded = st.file_uploader(
         "Carregue seus PDFs aqui", type="pdf", accept_multiple_files=True
     )
+    st.sidebar.markdown("---")
+    st.sidebar.header("📊 Logs de Auditoria")
+    if os.path.exists(LOG_FILE):
+        with open(LOG_FILE, "rb") as f:
+            st.sidebar.download_button(
+                label="📥 Baixar Logs da Conversa (CSV)",
+                data=f,
+                file_name="historico_tcc.csv",
+                mime="text/csv"
+            )
 index_ready = False
 
 if uploaded:
@@ -110,9 +141,11 @@ if index_ready:
 
         with st.chat_message("assistant"):
             with st.spinner("Lendo documentos e formulando resposta..."):
+                
+                # --- INICIO DA CONTAGEM DE TEMPO ---
+                start_time = time.time()
+                
                 q_emb = embed_model.encode([prompt_user], convert_to_numpy=True)
-                # MELHORIA PRO PERFIL: top-k ajustar
-                # k=3 : soma textos caiba 512 tokens / pra dar um pouco mais de contexto
                 D, Idx = st.session_state["index"].search(q_emb, k=6)
                 top_idxs = Idx[0].tolist()
 
@@ -123,24 +156,32 @@ if index_ready:
                 ]
                 context_text = "\n\n".join(context_chunks)
 
-                # MELHORIA PRO PERFIL: escolha melhoria do prompt
-                # --- Engenharia de Prompt ---
                 final_prompt = f"Baseado APENAS no contexto abaixo, responda a pergunta.\n\nContexto:\n{context_text}\n\nPergunta: {prompt_user}\nResposta:"
 
                 try:
                     output = gen_pipe(
                         final_prompt,
                         max_new_tokens=500,
-                        do_sample=False,  # Deterministico (sempre a mesma resposta para a mesma pergunta)
+                        do_sample=False,
                         truncation=True,
                     )
                     response_text = output[0]["generated_text"]
                 except Exception as e:
                     response_text = f"Desculpe, tive um erro interno: {str(e)}"
 
+                # --- FIM DA CONTAGEM DE TEMPO ---
+                end_time = time.time()
+                elapsed_time = end_time - start_time
+
+                # --- SALVAR LOG ---
+                log_interaction(prompt_user, response_text, context_text, elapsed_time)
+                
+                # Adicione esta linha para confirmar visualmente que salvou:
+                st.toast("Log salvo com sucesso!", icon="💾") 
+
                 st.markdown(response_text)
 
-                with st.expander("🕵️‍♂️ Ver trechos usados do PDF"):
+                with st.expander(f"🕵️‍♂️ Ver trechos usados (Tempo: {elapsed_time:.2f}s)"):
                     st.write(context_text)
 
         st.session_state.messages.append(
