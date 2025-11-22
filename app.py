@@ -163,13 +163,13 @@ def load_models():
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 
     pipe = pipeline("text2text-generation", model=model, tokenizer=tokenizer, device=-1)
-    st.session_state['embedding_dim'] = 384  # Dimensão do all-MiniLM-L6-v2
-    return embed_model, pipe
+    
+    embedding_dim = 384
+    return embed_model, pipe, embedding_dim
 
 
-embed_model, gen_pipe = load_models()
+embed_model, gen_pipe, dim = load_models()
 st.session_state.embed_model = embed_model
-dim = st.session_state['embedding_dim']
 
 # ---------- 3. Sidebar & Upload ----------
 with st.sidebar:
