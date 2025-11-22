@@ -4,6 +4,7 @@ import faiss
 import hashlib
 import streamlit as st
 import pandas as pd
+import numpy as np
 from PyPDF2 import PdfReader
 from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
@@ -133,12 +134,8 @@ def calculate_accuracy(generated_response_emb, expected_response_emb):
     # Produto escalar (numerador)
     dot_product = generated_response_emb.dot(expected_response_emb)
     # Normas (denominador)
-    norm_gen = st.session_state.embed_model.util.numpy_linalg.norm(
-        generated_response_emb
-    )
-    norm_exp = st.session_state.embed_model.util.numpy_linalg.norm(
-        expected_response_emb
-    )
+    norm_gen = np.linalg.norm(generated_response_emb)
+    norm_exp = np.linalg.norm(expected_response_emb)
 
     if norm_gen == 0 or norm_exp == 0:
         return 0.0  # Evita divisão por zero
