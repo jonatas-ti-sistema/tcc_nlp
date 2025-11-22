@@ -18,9 +18,13 @@ st.title("📚 Chat - Teste inicial rodando no Streamlit Cloud")
 LOG_FILE = "chat_log.csv"
 token = st.secrets["GITHUB_TOKEN"]
 repo_name = st.secrets["REPO_NAME"]
-# MELHORIA PRO PERFIL: ajuste de chunking, atual 100/50
-chunk_size = 100
-overlap = 50
+# MELHORIA PRO PERFIL: ajuste de chunking, atual 200/20
+chunk_size = 200
+overlap = 20
+top_k = 3
+embedding_model = "sentence-transformers/all-MiniLM-L6-v2"
+dim_value = 384
+llm = "google/flan-t5-base"
 
 
 def get_questions_dataset_github():
@@ -61,7 +65,7 @@ def log_interaction_github(question, response, context, time_taken, accuracy):
         # Limpeza simples para não quebrar a estrutura do Pipe "|"
         clean_question = question.replace("\n", " ").replace("\r", "").replace("|", "")
         clean_response = response.replace("\n", " ").replace("\r", "").replace("|", "")
-        clean_context = context.replace("\n", " ").replace("\r", "").replace("|", "")
+        clean_context = context.replace("\n", "; •> ").replace("\r", "").replace("|", "")
 
         if isinstance(accuracy, (int, float)):
             accuracy_str = f"{accuracy:.2f}%"
@@ -154,17 +158,17 @@ def load_models():
     # Carrega Embeddings
     # melhoria pro perfil: escolha do modelo de embedding
     # embed_model = SentenceTransformer("all-MiniLM-L6-v2")
-    embed_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+    embed_model = SentenceTransformer(embedding_model)
 
     # MELHORIA PRO PERFIL: escolha do LLM
     # model_name = "google/flan-t5-small"
-    model_name = "google/flan-t5-base"
+    model_name = llm
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 
     pipe = pipeline("text2text-generation", model=model, tokenizer=tokenizer, device=-1)
     
-    embedding_dim = 384
+    embedding_dim = dim_value
     return embed_model, pipe, embedding_dim
 
 
@@ -245,7 +249,7 @@ if index_ready:
 
                 q_emb = embed_model.encode([prompt_user], convert_to_numpy=True)
                 # MELHORIA PRO PERFIL: ajuste do k
-                D, Idx = st.session_state["index"].search(q_emb, k=4)
+                D, Idx = st.session_state["index"].search(q_emb, k=top_k)
                 top_idxs = Idx[0].tolist()
 
                 context_chunks = [
@@ -254,7 +258,7 @@ if index_ready:
                     if i < len(st.session_state["chunks"])
                 ]
                 context_text = "\n\n".join(context_chunks)
-
+                # MELHORIA PRO PERFIL: ajuste do prompting engineering
                 final_prompt = f"Baseado APENAS no contexto abaixo, responda a pergunta.\n\nContexto:\n{context_text}\n\nPergunta: {prompt_user}\nResposta:"
 
                 try:
