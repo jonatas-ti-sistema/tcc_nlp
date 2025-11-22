@@ -23,7 +23,7 @@ chunk_size = 200
 overlap = 20
 top_k = 3
 embedding_model = "sentence-transformers/all-MiniLM-L6-v2"
-dim_value = 384
+dim_value = 50
 llm = "google/flan-t5-base"
 
 
@@ -161,12 +161,12 @@ def load_models():
     embed_model = SentenceTransformer(embedding_model)
 
     # MELHORIA PRO PERFIL: escolha do LLM
-    # model_name = "google/flan-t5-small"
+    # model_name = "google/flan-t5-base"
     model_name = llm
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 
-    pipe = pipeline("text2text-generation", model=model, tokenizer=tokenizer, device=-1)
+    pipe = pipeline("text2text-generation", model=model, tokenizer=tokenizer, device='cpu')
     
     embedding_dim = dim_value
     return embed_model, pipe, embedding_dim
@@ -190,8 +190,8 @@ index_ready = False
 if uploaded:
     all_text = ""
     hashes = []
-    for f in uploaded:
-        b = f.read()
+    for file in uploaded:
+        b = file.read()
         hashes.append(file_hash_bytes(b))
         reader = PdfReader(io.BytesIO(b))
         for p in reader.pages:
@@ -259,7 +259,7 @@ if index_ready:
                 ]
                 context_text = "\n\n".join(context_chunks)
                 # MELHORIA PRO PERFIL: ajuste do prompting engineering
-                final_prompt = f"Baseado APENAS no contexto abaixo, responda a pergunta.\n\nContexto:\n{context_text}\n\nPergunta: {prompt_user}\nResposta:"
+                final_prompt = f"Baseado no Contexto: {context_text}\nResponda a Pergunta: {prompt_user}"
 
                 try:
                     output = gen_pipe(
