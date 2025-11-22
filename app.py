@@ -23,7 +23,7 @@ chunk_size = 200
 overlap = 20
 top_k = 3
 embedding_model = "sentence-transformers/all-MiniLM-L6-v2"
-dim_value = 50
+dim_value = 384
 llm = "google/flan-t5-base"
 
 
