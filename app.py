@@ -54,6 +54,25 @@ perfis = {
 # llm = "google/flan-t5-base"
 
 
+def reset_index():
+    """Remove o índice FAISS e a chave de cache para forçar a recriação."""
+    if "index" in st.session_state:
+        del st.session_state["index"]
+    if "chunks" in st.session_state:
+        del st.session_state["chunks"]
+    if "index_key" in st.session_state:
+        del st.session_state["index_key"]
+    # Limpa também os dados de validação, para garantir que o embed_model correto seja usado para eles
+    if "validation_embeddings" in st.session_state:
+        del st.session_state["validation_embeddings"]
+    if "validation_index" in st.session_state:
+        del st.session_state["validation_index"]
+    
+    # Esta linha força o Streamlit a re-executar todo o script
+    # E é a maneira mais confiável de simular um "reload total" na lógica do app.
+    st.experimental_rerun()
+
+
 def get_questions_dataset_github():
     file_path = "set_perguntas_respostas.csv"
 
@@ -201,7 +220,7 @@ def load_models(profile_name):
 
 with st.sidebar:
     st.header("📂 Gestão de Arquivos")
-    selected_profile = st.selectbox("Escolha um Perfil:", perfis.keys())
+    selected_profile = st.selectbox("Escolha um Perfil:", perfis.keys(), key="profile_selector", on_change=reset_index)
     uploaded = st.file_uploader(
         "Carregue seus PDFs aqui", type="pdf", accept_multiple_files=True
     )
