@@ -37,6 +37,7 @@ perfis = {
         "llm": "google/flan-t5-base",
     },
     "Perfil_3": {
+        # observação: mudar pra gemini API
         "chunk_size": 250,
         "overlap": 30,
         "top_k": 7,
@@ -45,6 +46,7 @@ perfis = {
         "llm": "google/flan-t5-xl",
     },
     "Perfil_4": {
+        # observação: mudar pra gemini API
         "chunk_size": 150,
         "overlap": 40,
         "top_k": 5,
@@ -75,7 +77,7 @@ def reset_index():
         del st.session_state["validation_embeddings"]
     if "validation_index" in st.session_state:
         del st.session_state["validation_index"]
-    
+    st.session_state.messages = []    
     # Esta linha força o Streamlit a re-executar todo o script
     # E é a maneira mais confiável de simular um "reload total" na lógica do app.
     st.rerun()
