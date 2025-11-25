@@ -70,7 +70,7 @@ def reset_index():
     
     # Esta linha força o Streamlit a re-executar todo o script
     # E é a maneira mais confiável de simular um "reload total" na lógica do app.
-    st.experimental_rerun()
+    st.rerun()
 
 
 def get_questions_dataset_github():
