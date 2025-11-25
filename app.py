@@ -30,19 +30,27 @@ perfis = {
     },
     "Perfil_2": {
         "chunk_size": 150,
-        "overlap": 30,
-        "top_k": 5,
-        "embedding_model": "sentence-transformers/all-mpnet-base-v2",
-        "dim_value": 768,
-        "llm": "google/flan-t5-large",
+        "overlap": 15,
+        "top_k": 1,
+        "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+        "dim_value": 384,
+        "llm": "google/flan-t5-base",
     },
     "Perfil_3": {
         "chunk_size": 250,
-        "overlap": 40,
+        "overlap": 30,
         "top_k": 7,
         "embedding_model": "sentence-transformers/all-MiniLM-L12-v2",
         "dim_value": 768,
         "llm": "google/flan-t5-xl",
+    },
+    "Perfil_4": {
+        "chunk_size": 150,
+        "overlap": 40,
+        "top_k": 5,
+        "embedding_model": "sentence-transformers/all-mpnet-base-v2",
+        "dim_value": 768,
+        "llm": "google/flan-t5-large",
     }
 }
 # perfil_name = 'perfil_1'
