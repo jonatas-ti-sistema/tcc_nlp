@@ -19,12 +19,39 @@ LOG_FILE = "chat_log.csv"
 token = st.secrets["GITHUB_TOKEN"]
 repo_name = st.secrets["REPO_NAME"]
 # MELHORIA PRO PERFIL: ajuste de chunking, atual 200/20
-chunk_size = 200
-overlap = 20
-top_k = 3
-embedding_model = "sentence-transformers/all-MiniLM-L6-v2"
-dim_value = 384
-llm = "google/flan-t5-base"
+perfis = {
+    "Perfil_1": {
+        "chunk_size": 200,
+        "overlap": 20,
+        "top_k": 3,
+        "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+        "dim_value": 384,
+        "llm": "google/flan-t5-base",
+    },
+    "Perfil_2": {
+        "chunk_size": 150,
+        "overlap": 30,
+        "top_k": 5,
+        "embedding_model": "sentence-transformers/all-mpnet-base-v2",
+        "dim_value": 768,
+        "llm": "google/flan-t5-large",
+    },
+    "Perfil_3": {
+        "chunk_size": 250,
+        "overlap": 40,
+        "top_k": 7,
+        "embedding_model": "sentence-transformers/all-MiniLM-L12-v2",
+        "dim_value": 768,
+        "llm": "google/flan-t5-xl",
+    }
+}
+# perfil_name = 'perfil_1'
+# chunk_size = 200
+# overlap = 20
+# top_k = 3
+# embedding_model = "sentence-transformers/all-MiniLM-L6-v2"
+# dim_value = 384
+# llm = "google/flan-t5-base"
 
 
 def get_questions_dataset_github():
@@ -72,7 +99,7 @@ def log_interaction_github(question, response, context, time_taken, accuracy):
         else:
             accuracy_str = str(accuracy)
 
-        new_line = f"{timestamp}|{clean_question}|{clean_response}|{clean_context}|{time_taken:.2f}|{accuracy_str}"
+        new_line = f"{selected_profile}|{perfis[selected_profile]['llm']}|{perfis[selected_profile]['embedding_model']}|{perfis[selected_profile]['dim_value']}|{perfis[selected_profile]['chunk_size']}|{perfis[selected_profile]['overlap']}|{perfis[selected_profile]['top_k']}|{timestamp}|{clean_question}|{clean_response}|{clean_context}|{time_taken:.2f}|{accuracy_str}"
 
         # 4. Tentar pegar o arquivo existente e atualizar
         try:
@@ -96,7 +123,7 @@ def log_interaction_github(question, response, context, time_taken, accuracy):
         except GithubException as e:
             # Se o arquivo não for encontrado (404), cria ele
             if e.status == 404:
-                header = "Timestamp|Pergunta|Resposta|Contexto_Usado|Tempo_Segundos|Acuracia\n"
+                header = "Nome_Perfil|LLM|Embedding_Model|Dim_Value|Chunk_Size|Overlap|Top_K|Timestamp|Pergunta|Resposta|Contexto_Usado|Tempo_Segundos|Acuracia\n"
                 create_content = header + new_line
                 repo.create_file(
                     path=file_path,
@@ -154,30 +181,27 @@ def calculate_accuracy(generated_response_emb, expected_response_emb):
 
 # ---------- 2. Load Models (Cache) ----------
 @st.cache_resource
-def load_models():
+def load_models(profile_name):
     # Carrega Embeddings
+    params = perfis[profile_name]
     # melhoria pro perfil: escolha do modelo de embedding
     # embed_model = SentenceTransformer("all-MiniLM-L6-v2")
-    embed_model = SentenceTransformer(embedding_model)
+    embed_model = SentenceTransformer(params['embedding_model'])
 
     # MELHORIA PRO PERFIL: escolha do LLM
     # model_name = "google/flan-t5-base"
-    model_name = llm
+    model_name = params['llm']
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 
     pipe = pipeline("text2text-generation", model=model, tokenizer=tokenizer, device='cpu')
     
-    embedding_dim = dim_value
+    embedding_dim = params['dim_value']
     return embed_model, pipe, embedding_dim
 
-
-embed_model, gen_pipe, dim = load_models()
-st.session_state.embed_model = embed_model
-
-# ---------- 3. Sidebar & Upload ----------
 with st.sidebar:
     st.header("📂 Gestão de Arquivos")
+    selected_profile = st.selectbox("Escolha um Perfil:", perfis.keys())
     uploaded = st.file_uploader(
         "Carregue seus PDFs aqui", type="pdf", accept_multiple_files=True
     )
@@ -186,6 +210,24 @@ with st.sidebar:
     st.sidebar.markdown("---")
     st.sidebar.info("Os logs estão sendo salvos automaticamente no GitHub.")
 index_ready = False
+
+embed_model, gen_pipe, dim = load_models(selected_profile)
+st.session_state.embed_model = embed_model
+st.session_state.gen_pipe = gen_pipe
+st.session_state.dim = dim
+
+# ---------- 3. Sidebar & Upload ----------
+# with st.sidebar:
+#     st.header("📂 Gestão de Arquivos")
+#     selected_profile = st.selectbox("Escolha um Perfil:", perfis.keys())
+#     uploaded = st.file_uploader(
+#         "Carregue seus PDFs aqui", type="pdf", accept_multiple_files=True
+#     )
+#     if "validation_data" not in st.session_state:
+#         st.session_state["validation_data"] = get_questions_dataset_github()
+#     st.sidebar.markdown("---")
+#     st.sidebar.info("Os logs estão sendo salvos automaticamente no GitHub.")
+# index_ready = False
 
 if uploaded:
     all_text = ""
@@ -206,7 +248,7 @@ if uploaded:
         or st.session_state["index_key"] != cache_key
     ):
         with st.spinner("⚙️ Processando PDFs e criando memória vetorial..."):
-            chunks = chunk_text(all_text, chunk_size, overlap)
+            chunks = chunk_text(all_text, perfis[selected_profile]['chunk_size'], perfis[selected_profile]['overlap'])
 
             if chunks:
                 # Cria embeddings
@@ -249,7 +291,7 @@ if index_ready:
 
                 q_emb = embed_model.encode([prompt_user], convert_to_numpy=True)
                 # MELHORIA PRO PERFIL: ajuste do k
-                D, Idx = st.session_state["index"].search(q_emb, k=top_k)
+                D, Idx = st.session_state["index"].search(q_emb, k=perfis[selected_profile]['top_k'])
                 top_idxs = Idx[0].tolist()
 
                 context_chunks = [
