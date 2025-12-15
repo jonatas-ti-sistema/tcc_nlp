@@ -22,8 +22,8 @@ repo_name = st.secrets["REPO_NAME"]
 # MELHORIA PRO PERFIL: ajuste de chunking, atual 200/20
 perfis = {
     "Perfil_1": {
-        "chunk_size": 200,
-        "overlap": 20,
+        "chunk_size": 512,
+        "overlap": 64,
         "top_k": 3,
         "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
         "dim_value": 384,
@@ -31,30 +31,33 @@ perfis = {
         "llm": "google/flan-t5-base",
     },
     "Perfil_2": {
-        "chunk_size": 150,
-        "overlap": 15,
-        "top_k": 1,
+        "chunk_size": 256,
+        "overlap": 16,
+        "top_k": 3,
         "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
         "dim_value": 384,
+        "prompt_technique": "2",
         "llm": "google/flan-t5-base",
     },
     "Perfil_3": {
         # observação: mudar pra gemini API
-        "chunk_size": 250,
-        "overlap": 30,
-        "top_k": 7,
-        "embedding_model": "sentence-transformers/all-MiniLM-L12-v2",
+        "chunk_size": 512,
+        "overlap": 64,
+        "top_k": 3,
+        "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
         "dim_value": 384,
-        "llm": "google/flan-t5-xl",
+        "prompt_technique": "1",
+        "llm": "google/flan-t5-base",
     },
     "Perfil_4": {
         # observação: mudar pra gemini API
-        "chunk_size": 150,
-        "overlap": 40,
-        "top_k": 5,
-        "embedding_model": "sentence-transformers/all-mpnet-base-v2",
-        "dim_value": 768,
-        "llm": "google/flan-t5-large",
+        "chunk_size": 256,
+        "overlap": 16,
+        "top_k": 3,
+        "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+        "dim_value": 384,
+        "prompt_technique": "2",
+        "llm": "google/flan-t5-base",
     },
 }
 # perfil_name = 'perfil_1'
@@ -244,8 +247,8 @@ with st.sidebar:
     selected_prompt = st.selectbox(
         "Escolha um Estilo de Prompt:",
         {
-            "1": "Prompt Simples",
-            "2": "Prompt Detalhado com Instruções",
+            "1": "Zero-shot",
+            "2": "Chain-of-thought",
         },
         key="prompt_selector",
     )
