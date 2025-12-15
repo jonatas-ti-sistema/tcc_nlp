@@ -27,6 +27,7 @@ perfis = {
         "top_k": 3,
         "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
         "dim_value": 384,
+        "prompt_technique": "1",
         "llm": "google/flan-t5-base",
     },
     "Perfil_2": {
