@@ -6,10 +6,11 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from PyPDF2 import PdfReader
-from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
 from datetime import datetime
 from github import Github, GithubException
+from sentence_transformers import SentenceTransformer
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 
 st.set_page_config(page_title="TCC NLP", layout="wide")
@@ -42,7 +43,7 @@ perfis = {
         "overlap": 30,
         "top_k": 7,
         "embedding_model": "sentence-transformers/all-MiniLM-L12-v2",
-        "dim_value": 768,
+        "dim_value": 384,
         "llm": "google/flan-t5-xl",
     },
     "Perfil_4": {
@@ -53,7 +54,7 @@ perfis = {
         "embedding_model": "sentence-transformers/all-mpnet-base-v2",
         "dim_value": 768,
         "llm": "google/flan-t5-large",
-    }
+    },
 }
 # perfil_name = 'perfil_1'
 # chunk_size = 200
@@ -77,7 +78,7 @@ def reset_index():
         del st.session_state["validation_embeddings"]
     if "validation_index" in st.session_state:
         del st.session_state["validation_index"]
-    st.session_state.messages = []    
+    st.session_state.messages = []
     # Esta linha força o Streamlit a re-executar todo o script
     # E é a maneira mais confiável de simular um "reload total" na lógica do app.
     st.rerun()
@@ -108,7 +109,7 @@ def get_questions_dataset_github():
         return None
 
 
-def log_interaction_github(question, response, context, time_taken, accuracy):
+def log_interaction_github(question, response, context, time_taken, accuracy, prompt_technique):
     file_path = st.secrets["FILE_PATH"]
 
     try:
@@ -121,14 +122,14 @@ def log_interaction_github(question, response, context, time_taken, accuracy):
         # Limpeza simples para não quebrar a estrutura do Pipe "|"
         clean_question = question.replace("\n", " ").replace("\r", "").replace("|", "")
         clean_response = response.replace("\n", " ").replace("\r", "").replace("|", "")
-        clean_context = context.replace("\n", "; •> ").replace("\r", "").replace("|", "")
+        clean_context = context.replace("\n", " •> ").replace("\r", "").replace("|", "")
 
         if isinstance(accuracy, (int, float)):
             accuracy_str = f"{accuracy:.2f}%"
         else:
             accuracy_str = str(accuracy)
 
-        new_line = f"{selected_profile}|{perfis[selected_profile]['llm']}|{perfis[selected_profile]['embedding_model']}|{perfis[selected_profile]['dim_value']}|{perfis[selected_profile]['chunk_size']}|{perfis[selected_profile]['overlap']}|{perfis[selected_profile]['top_k']}|{timestamp}|{clean_question}|{clean_response}|{clean_context}|{time_taken:.2f}|{accuracy_str}"
+        new_line = f"{selected_profile}|{perfis[selected_profile]['llm']}|{perfis[selected_profile]['embedding_model']}|{perfis[selected_profile]['dim_value']}|{perfis[selected_profile]['chunk_size']}|{perfis[selected_profile]['overlap']}|{perfis[selected_profile]['top_k']}|{timestamp}|{prompt_technique}|{clean_question}|{clean_response}|{clean_context}|{time_taken:.2f}|{accuracy_str}"
 
         # 4. Tentar pegar o arquivo existente e atualizar
         try:
@@ -152,7 +153,7 @@ def log_interaction_github(question, response, context, time_taken, accuracy):
         except GithubException as e:
             # Se o arquivo não for encontrado (404), cria ele
             if e.status == 404:
-                header = "Nome_Perfil|LLM|Embedding_Model|Dim_Value|Chunk_Size|Overlap|Top_K|Timestamp|Pergunta|Resposta|Contexto_Usado|Tempo_Segundos|Acuracia\n"
+                header = "Nome_Perfil|LLM|Embedding_Model|Dim_Value|Chunk_Size|Overlap|Top_K|Prompt_technique|Timestamp|Pergunta|Resposta|Contexto_Usado|Tempo_Segundos|Acuracia\n"
                 create_content = header + new_line
                 repo.create_file(
                     path=file_path,
@@ -169,14 +170,14 @@ def log_interaction_github(question, response, context, time_taken, accuracy):
 
 # ---------- Helpers ----------
 def chunk_text(text, chunk_size=100, overlap=50):
-    words = text.split()
-    chunks = []
-    i = 0
-    while i < len(words):
-        chunk = words[i : i + chunk_size]
-        chunks.append(" ".join(chunk))
-        i += chunk_size - overlap
-    return chunks
+    text_splitter = RecursiveCharacterTextSplitter(
+        separators=["\n\n", "\n", ".", "!", "?", " "],  # Tenta preservar a estrutura
+        chunk_size=chunk_size,
+        chunk_overlap=overlap,
+        length_function=len,  # Mede o tamanho em caracteres
+    )
+    docs = text_splitter.create_documents([text])
+    return [doc.page_content for doc in docs]
 
 
 def file_hash_bytes(b: bytes):
@@ -215,22 +216,38 @@ def load_models(profile_name):
     params = perfis[profile_name]
     # melhoria pro perfil: escolha do modelo de embedding
     # embed_model = SentenceTransformer("all-MiniLM-L6-v2")
-    embed_model = SentenceTransformer(params['embedding_model'])
+    embed_model = SentenceTransformer(params["embedding_model"])
 
     # MELHORIA PRO PERFIL: escolha do LLM
     # model_name = "google/flan-t5-base"
-    model_name = params['llm']
+    model_name = params["llm"]
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 
-    pipe = pipeline("text2text-generation", model=model, tokenizer=tokenizer, device='cpu')
-    
-    embedding_dim = params['dim_value']
+    pipe = pipeline(
+        "text2text-generation", model=model, tokenizer=tokenizer, device="cpu"
+    )
+
+    embedding_dim = params["dim_value"]
     return embed_model, pipe, embedding_dim
+
 
 with st.sidebar:
     st.header("📂 Gestão de Arquivos")
-    selected_profile = st.selectbox("Escolha um Perfil:", perfis.keys(), key="profile_selector", on_change=reset_index)
+    selected_profile = st.selectbox(
+        "Escolha um Perfil:",
+        perfis.keys(),
+        key="profile_selector",
+        on_change=reset_index,
+    )
+    selected_prompt = st.selectbox(
+        "Escolha um Estilo de Prompt:",
+        {
+            "1": "Prompt Simples",
+            "2": "Prompt Detalhado com Instruções",
+        },
+        key="prompt_selector",
+    )
     uploaded = st.file_uploader(
         "Carregue seus PDFs aqui", type="pdf", accept_multiple_files=True
     )
@@ -277,7 +294,11 @@ if uploaded:
         or st.session_state["index_key"] != cache_key
     ):
         with st.spinner("⚙️ Processando PDFs e criando memória vetorial..."):
-            chunks = chunk_text(all_text, perfis[selected_profile]['chunk_size'], perfis[selected_profile]['overlap'])
+            chunks = chunk_text(
+                all_text,
+                perfis[selected_profile]["chunk_size"],
+                perfis[selected_profile]["overlap"],
+            )
 
             if chunks:
                 # Cria embeddings
@@ -320,7 +341,9 @@ if index_ready:
 
                 q_emb = embed_model.encode([prompt_user], convert_to_numpy=True)
                 # MELHORIA PRO PERFIL: ajuste do k
-                D, Idx = st.session_state["index"].search(q_emb, k=perfis[selected_profile]['top_k'])
+                D, Idx = st.session_state["index"].search(
+                    q_emb, k=perfis[selected_profile]["top_k"]
+                )
                 top_idxs = Idx[0].tolist()
 
                 context_chunks = [
@@ -330,11 +353,19 @@ if index_ready:
                 ]
                 context_text = "\n\n".join(context_chunks)
                 # MELHORIA PRO PERFIL: ajuste do prompting engineering
-                final_prompt = f"Baseado no Contexto: {context_text}\nResponda a Pergunta: {prompt_user}"
+                prompt_options = {
+                    "1": f"Baseado no Contexto: {context_text}\nResponda a Pergunta: {prompt_user}",
+                    "2": (
+                        f"Você é um assistente de IA. Sua única tarefa é responder à Pergunta do Usuário **EXCLUSIVAMENTE** com base no Contexto fornecido. "
+                        f"Se o Contexto não contiver a informação necessária, responda 'Não encontrei a resposta nos documentos fornecidos.' "
+                        f"Contexto: {context_text}\n\n"
+                        f"Pergunta do Usuário: {prompt_user}"
+                    ),
+                }
 
                 try:
                     output = gen_pipe(
-                        final_prompt,
+                        prompt_options[selected_prompt],
                         max_new_tokens=500,
                         do_sample=False,
                         truncation=True,
@@ -400,7 +431,7 @@ if index_ready:
                 # --- SALVAR LOG NO GITHUB ---
                 with st.spinner("Salvando registro na nuvem..."):
                     log_interaction_github(
-                        prompt_user, response_text, context_text, elapsed_time, accuracy
+                        prompt_user, response_text, context_text, elapsed_time, accuracy, selected_prompt
                     )
                 st.toast("Log salvo com sucesso!", icon="💾")
 
