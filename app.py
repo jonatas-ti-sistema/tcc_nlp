@@ -27,7 +27,7 @@ perfis = {
         "top_k": 3,
         "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
         "dim_value": 384,
-        "prompt_technique": "1",
+        "prompt_technique": "zero-shot",
         "llm": "google/flan-t5-base",
     },
     "Perfil_2": {
@@ -36,7 +36,7 @@ perfis = {
         "top_k": 3,
         "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
         "dim_value": 384,
-        "prompt_technique": "2",
+        "prompt_technique": "chain-of-thought",
         "llm": "google/flan-t5-base",
     },
     "Perfil_3": {
@@ -46,7 +46,7 @@ perfis = {
         "top_k": 3,
         "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
         "dim_value": 384,
-        "prompt_technique": "1",
+        "prompt_technique": "zero-shot",
         "llm": "google/flan-t5-base",
     },
     "Perfil_4": {
@@ -56,7 +56,7 @@ perfis = {
         "top_k": 3,
         "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
         "dim_value": 384,
-        "prompt_technique": "2",
+        "prompt_technique": "chain-of-thought",
         "llm": "google/flan-t5-base",
     },
 }
@@ -113,7 +113,9 @@ def get_questions_dataset_github():
         return None
 
 
-def log_interaction_github(question, response, context, time_taken, accuracy, prompt_technique):
+def log_interaction_github(
+    question, response, context, time_taken, accuracy, prompt_technique
+):
     file_path = st.secrets["FILE_PATH"]
 
     try:
@@ -244,14 +246,6 @@ with st.sidebar:
         key="profile_selector",
         on_change=reset_index,
     )
-    selected_prompt = st.selectbox(
-        "Escolha um Estilo de Prompt:",
-        {
-            "1": "Zero-shot",
-            "2": "Chain-of-thought",
-        },
-        key="prompt_selector",
-    )
     uploaded = st.file_uploader(
         "Carregue seus PDFs aqui", type="pdf", accept_multiple_files=True
     )
@@ -358,18 +352,31 @@ if index_ready:
                 context_text = "\n\n".join(context_chunks)
                 # MELHORIA PRO PERFIL: ajuste do prompting engineering
                 prompt_options = {
-                    "1": f"Baseado no Contexto: {context_text}\nResponda a Pergunta: {prompt_user}",
-                    "2": (
-                        f"Você é um assistente de IA. Sua única tarefa é responder à Pergunta do Usuário **EXCLUSIVAMENTE** com base no Contexto fornecido. "
-                        f"Se o Contexto não contiver a informação necessária, responda 'Não encontrei a resposta nos documentos fornecidos.' "
-                        f"Contexto: {context_text}\n\n"
-                        f"Pergunta do Usuário: {prompt_user}"
+                    "zero-shot_aprimorado": (
+                        f"Você é um assistente de pesquisa altamente factual. Sua única fonte de informação é o CONTEXTO abaixo. "
+                        f"Siga as regras rigorosamente:\n"
+                        f"1. **NÃO** use conhecimento prévio; responda estritamente com o CONTEXTO.\n"
+                        f"2. Se o CONTEXTO não contiver a resposta, você deve responder *apenas* a frase: 'Não encontrei a resposta nos documentos fornecidos.'\n"
+                        f"3. Sua resposta deve ser direta e concisa.\n\n"
+                        f"--- CONTEXTO ---\n{context_text}\n\n"
+                        f"--- PERGUNTA DO USUÁRIO ---\n{prompt_user}\n\n"
+                        f"--- RESPOSTA CONCISA ---"
+                    ),
+                    "chain-of-thought": (
+                        f"Você é um assistente de IA especialista em análise de documentos. "
+                        f"Sua única tarefa é responder à PERGUNTA DO USUÁRIO **EXCLUSIVAMENTE** com base no CONTEXTO fornecido."
+                        f"Siga rigorosamente os passos abaixo para gerar sua resposta:\n\n"
+                        f"1. **RACIOCÍNIO (Passos Internos):** Analise o CONTEXTO, identifique e sintetize as partes exatas que respondem à PERGUNTA DO USUÁRIO. Se a informação não estiver no contexto, este passo deve apenas declarar: 'O contexto fornecido é insuficiente para responder à pergunta.'\n"
+                        f"2. **RESPOSTA FINAL:** Com base no seu RACIOCÍNIO, escreva uma resposta clara e concisa. Se o RACIOCÍNIO indicou que a informação é insuficiente, a RESPOSTA FINAL deve ser 'Não encontrei a resposta nos documentos fornecidos.'\n\n"
+                        f"--- CONTEXTO ---\n{context_text}\n\n"
+                        f"--- PERGUNTA DO USUÁRIO ---\n{prompt_user}\n\n"
+                        f"--- RESPOSTA ---"
                     ),
                 }
 
                 try:
                     output = gen_pipe(
-                        prompt_options[selected_prompt],
+                        prompt_options[perfis[selected_profile]["prompt_technique"]],
                         max_new_tokens=500,
                         do_sample=False,
                         truncation=True,
@@ -435,7 +442,12 @@ if index_ready:
                 # --- SALVAR LOG NO GITHUB ---
                 with st.spinner("Salvando registro na nuvem..."):
                     log_interaction_github(
-                        prompt_user, response_text, context_text, elapsed_time, accuracy, selected_prompt
+                        prompt_user,
+                        response_text,
+                        context_text,
+                        elapsed_time,
+                        accuracy,
+                        selected_prompt,
                     )
                 st.toast("Log salvo com sucesso!", icon="💾")
 
