@@ -456,7 +456,7 @@ if index_ready:
                         context_text,
                         elapsed_time,
                         accuracy,
-                        selected_prompt,
+                        selected_profile["prompt_technique"],
                     )
                 st.toast("Log salvo com sucesso!", icon="💾")
 
