@@ -247,7 +247,11 @@ with st.sidebar:
         on_change=reset_index,
     )
     st.sidebar.info(
-        f"chunk_size: {perfis[selected_profile]['chunk_size']},\n overlap: {perfis[selected_profile]['overlap']},\n top_k: {perfis[selected_profile]['top_k']},\n prompt_technique: {perfis[selected_profile]['prompt_technique']},\n llm: {perfis[selected_profile]['llm']}"
+        f"chunk_size: {perfis[selected_profile]['chunk_size']}",
+        f"overlap: {perfis[selected_profile]['overlap']}",
+        f"top_k: {perfis[selected_profile]['top_k']}",
+        f"prompt_technique: {perfis[selected_profile]['prompt_technique']}",
+        f"llm: {perfis[selected_profile]['llm']}"
     )
     uploaded = st.file_uploader(
         "Carregue seus PDFs aqui", type="pdf", accept_multiple_files=True
