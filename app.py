@@ -361,7 +361,7 @@ if index_ready:
                 context_text = "\n\n".join(context_chunks)
                 # MELHORIA PRO PERFIL: ajuste do prompting engineering
                 prompt_options = {
-                    "zero-shot_aprimorado": (
+                    "zero-shot": (
                         f"Você é um assistente de pesquisa altamente factual. Sua única fonte de informação é o CONTEXTO abaixo. "
                         f"Siga as regras rigorosamente:\n"
                         f"1. **NÃO** use conhecimento prévio; responda estritamente com o CONTEXTO.\n"
