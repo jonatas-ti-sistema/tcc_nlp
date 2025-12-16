@@ -6,7 +6,11 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from PyPDF2 import PdfReader
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
+from transformers import (
+    AutoTokenizer,
+    AutoModelForSeq2SeqLM,
+    pipeline,
+)
 from datetime import datetime
 from github import Github, GithubException
 from sentence_transformers import SentenceTransformer
@@ -14,14 +18,14 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 
 st.set_page_config(page_title="TCC NLP", layout="wide")
-st.title("📚 Chat - Teste inicial rodando no Streamlit Cloud")
+st.title("📚 Chatbot inteligente: Otimizando a Gestão de Informação em IES")
 
 LOG_FILE = "chat_log.csv"
 token = st.secrets["GITHUB_TOKEN"]
 repo_name = st.secrets["REPO_NAME"]
-# MELHORIA PRO PERFIL: ajuste de chunking, atual 200/20
+# ---------- 1. Perfis de Configuração ----------
 perfis = {
-    "Perfil_1": {
+    "Perfil_1A": {
         "chunk_size": 512,
         "overlap": 64,
         "top_k": 3,
@@ -30,7 +34,7 @@ perfis = {
         "prompt_technique": "zero-shot",
         "llm": "google/flan-t5-base",
     },
-    "Perfil_2": {
+    "Perfil_2A": {
         "chunk_size": 256,
         "overlap": 16,
         "top_k": 3,
@@ -39,8 +43,7 @@ perfis = {
         "prompt_technique": "chain-of-thought",
         "llm": "google/flan-t5-base",
     },
-    "Perfil_3": {
-        # observação: mudar pra gemini API
+    "Perfil_3A": {
         "chunk_size": 512,
         "overlap": 64,
         "top_k": 3,
@@ -49,8 +52,7 @@ perfis = {
         "prompt_technique": "zero-shot",
         "llm": "google/flan-t5-base",
     },
-    "Perfil_4": {
-        # observação: mudar pra gemini API
+    "Perfil_4A": {
         "chunk_size": 256,
         "overlap": 16,
         "top_k": 3,
@@ -60,13 +62,6 @@ perfis = {
         "llm": "google/flan-t5-base",
     },
 }
-# perfil_name = 'perfil_1'
-# chunk_size = 200
-# overlap = 20
-# top_k = 3
-# embedding_model = "sentence-transformers/all-MiniLM-L6-v2"
-# dim_value = 384
-# llm = "google/flan-t5-base"
 
 
 def reset_index():
@@ -113,9 +108,7 @@ def get_questions_dataset_github():
         return None
 
 
-def log_interaction_github(
-    question, response, context, time_taken, accuracy
-):
+def log_interaction_github(question, response, context, time_taken, accuracy):
     file_path = st.secrets["FILE_PATH"]
 
     try:
@@ -218,14 +211,10 @@ def calculate_accuracy(generated_response_emb, expected_response_emb):
 # ---------- 2. Load Models (Cache) ----------
 @st.cache_resource
 def load_models(profile_name):
-    # Carrega Embeddings
+    # Carrega Embeddings, embed_model = SentenceTransformer("all-MiniLM-L6-v2")
     params = perfis[profile_name]
-    # melhoria pro perfil: escolha do modelo de embedding
-    # embed_model = SentenceTransformer("all-MiniLM-L6-v2")
     embed_model = SentenceTransformer(params["embedding_model"])
 
-    # MELHORIA PRO PERFIL: escolha do LLM
-    # model_name = "google/flan-t5-base"
     model_name = params["llm"]
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
@@ -238,6 +227,7 @@ def load_models(profile_name):
     return embed_model, pipe, embedding_dim
 
 
+# ---------- 3. Sidebar & Upload ----------
 with st.sidebar:
     st.header("📂 Gestão de Arquivos")
     selected_profile = st.selectbox(
@@ -246,13 +236,14 @@ with st.sidebar:
         key="profile_selector",
         on_change=reset_index,
     )
-    st.sidebar.info(
+    st.sidebar.markdown(
         f"""
-        chunk_size: {perfis[selected_profile]["chunk_size"]},
-        overlap: {perfis[selected_profile]["overlap"]},
-        top_k: {perfis[selected_profile]["top_k"]},
-        prompt_technique: {perfis[selected_profile]["prompt_technique"]},
-        llm: {perfis[selected_profile]["llm"]}
+        ### ⚙️ Parâmetros do Perfil
+        * **Chunk Size:** `{perfis[selected_profile]["chunk_size"]}`
+        * **Overlap:** `{perfis[selected_profile]["overlap"]}`
+        * **Top K:** `{perfis[selected_profile]["top_k"]}`
+        * **Técnica:** `{perfis[selected_profile]["prompt_technique"]}`
+        * **LLM:** `{perfis[selected_profile]["llm"]}`
         """
     )
     uploaded = st.file_uploader(
@@ -269,7 +260,6 @@ st.session_state.embed_model = embed_model
 st.session_state.gen_pipe = gen_pipe
 st.session_state.dim = dim
 
-# ---------- 3. Sidebar & Upload ----------
 # with st.sidebar:
 #     st.header("📂 Gestão de Arquivos")
 #     selected_profile = st.selectbox("Escolha um Perfil:", perfis.keys())
@@ -451,11 +441,7 @@ if index_ready:
                 # --- SALVAR LOG NO GITHUB ---
                 with st.spinner("Salvando registro na nuvem..."):
                     log_interaction_github(
-                        prompt_user,
-                        response_text,
-                        context_text,
-                        elapsed_time,
-                        accuracy
+                        prompt_user, response_text, context_text, elapsed_time, accuracy
                     )
                 st.toast("Log salvo com sucesso!", icon="💾")
 
