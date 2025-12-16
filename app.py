@@ -114,7 +114,7 @@ def get_questions_dataset_github():
 
 
 def log_interaction_github(
-    question, response, context, time_taken, accuracy, prompt_technique
+    question, response, context, time_taken, accuracy
 ):
     file_path = st.secrets["FILE_PATH"]
 
@@ -135,7 +135,7 @@ def log_interaction_github(
         else:
             accuracy_str = str(accuracy)
 
-        new_line = f"{selected_profile}|{perfis[selected_profile]['llm']}|{perfis[selected_profile]['embedding_model']}|{perfis[selected_profile]['dim_value']}|{perfis[selected_profile]['chunk_size']}|{perfis[selected_profile]['overlap']}|{perfis[selected_profile]['top_k']}|{timestamp}|{prompt_technique}|{clean_question}|{clean_response}|{clean_context}|{time_taken:.2f}|{accuracy_str}"
+        new_line = f"{selected_profile}|{perfis[selected_profile]['llm']}|{perfis[selected_profile]['embedding_model']}|{perfis[selected_profile]['dim_value']}|{perfis[selected_profile]['chunk_size']}|{perfis[selected_profile]['overlap']}|{perfis[selected_profile]['top_k']}|{timestamp}|{perfis[selected_profile]['prompt_technique']}|{clean_question}|{clean_response}|{clean_context}|{time_taken:.2f}|{accuracy_str}"
 
         # 4. Tentar pegar o arquivo existente e atualizar
         try:
@@ -455,8 +455,7 @@ if index_ready:
                         response_text,
                         context_text,
                         elapsed_time,
-                        accuracy,
-                        selected_profile["prompt_technique"],
+                        accuracy
                     )
                 st.toast("Log salvo com sucesso!", icon="💾")
 
