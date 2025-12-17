@@ -40,7 +40,7 @@ perfis = {
         "top_k": 3,
         "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
         "dim_value": 384,
-        "prompt_technique": "chain-of-thought",
+        "prompt_technique": "zero-shot",
         "llm": "google/flan-t5-base",
     },
     "Perfil_3A": {
@@ -49,7 +49,7 @@ perfis = {
         "top_k": 3,
         "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
         "dim_value": 384,
-        "prompt_technique": "zero-shot",
+        "prompt_technique": "chain-of-thought",
         "llm": "google/flan-t5-base",
     },
     "Perfil_4A": {
