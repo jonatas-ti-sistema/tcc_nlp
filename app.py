@@ -25,7 +25,7 @@ token = st.secrets["GITHUB_TOKEN"]
 repo_name = st.secrets["REPO_NAME"]
 # ---------- 1. Perfis de Configuração ----------
 perfis = {
-    "Perfil_1A": {
+    "Perfil_1": {
         "chunk_size": 512,
         "overlap": 64,
         "top_k": 3,
@@ -34,7 +34,7 @@ perfis = {
         "prompt_technique": "zero-shot",
         "llm": "google/flan-t5-base",
     },
-    "Perfil_2A": {
+    "Perfil_2": {
         "chunk_size": 256,
         "overlap": 16,
         "top_k": 3,
@@ -43,7 +43,7 @@ perfis = {
         "prompt_technique": "zero-shot",
         "llm": "google/flan-t5-base",
     },
-    "Perfil_3A": {
+    "Perfil_3": {
         "chunk_size": 512,
         "overlap": 64,
         "top_k": 3,
@@ -52,7 +52,7 @@ perfis = {
         "prompt_technique": "chain-of-thought",
         "llm": "google/flan-t5-base",
     },
-    "Perfil_4A": {
+    "Perfil_4": {
         "chunk_size": 256,
         "overlap": 16,
         "top_k": 3,
@@ -152,7 +152,7 @@ def log_interaction_github(question, response, context, time_taken, accuracy):
         except GithubException as e:
             # Se o arquivo não for encontrado (404), cria ele
             if e.status == 404:
-                header = "Nome_Perfil|LLM|Embedding_Model|Dim_Value|Chunk_Size|Overlap|Top_K|Prompt_technique|Timestamp|Pergunta|Resposta|Contexto_Usado|Tempo_Segundos|Acuracia\n"
+                header = "Nome_Perfil|LLM|Embedding_Model|Dim_Value|Chunk_Size|Overlap|Top_K|Timestamp|Prompt_technique|Pergunta|Resposta|Contexto_Usado|Tempo_Segundos|Acuracia\n"
                 create_content = header + new_line
                 repo.create_file(
                     path=file_path,
