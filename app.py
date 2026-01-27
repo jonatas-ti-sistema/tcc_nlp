@@ -46,7 +46,7 @@ perfis = {
     "Perfil_3": {
         "chunk_size": 512,
         "overlap": 64,
-        "top_k": 3,
+        "top_k": 2,
         "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
         "dim_value": 384,
         "prompt_technique": "chain-of-thought",
@@ -55,7 +55,7 @@ perfis = {
     "Perfil_4": {
         "chunk_size": 256,
         "overlap": 16,
-        "top_k": 3,
+        "top_k": 2,
         "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
         "dim_value": 384,
         "prompt_technique": "chain-of-thought",
@@ -361,15 +361,25 @@ if index_ready:
                         f"--- PERGUNTA DO USUÁRIO ---\n{prompt_user}\n\n"
                         f"--- RESPOSTA CONCISA ---"
                     ),
+                    # TEM QUE MELHORAR ESSA PARTE AINDA
                     "chain-of-thought": (
-                        f"Você é um assistente de IA especialista em análise de documentos. "
-                        f"Sua única tarefa é responder à PERGUNTA DO USUÁRIO **EXCLUSIVAMENTE** com base no CONTEXTO fornecido."
-                        f"Siga rigorosamente os passos abaixo para gerar sua resposta:\n\n"
-                        f"1. **RACIOCÍNIO (Passos Internos):** Analise o CONTEXTO, identifique e sintetize as partes exatas que respondem à PERGUNTA DO USUÁRIO. Se a informação não estiver no contexto, este passo deve apenas declarar: 'O contexto fornecido é insuficiente para responder à pergunta.'\n"
-                        f"2. **RESPOSTA FINAL:** Com base no seu RACIOCÍNIO, escreva uma resposta clara e concisa. Se o RACIOCÍNIO indicou que a informação é insuficiente, a RESPOSTA FINAL deve ser 'Não encontrei a resposta nos documentos fornecidos.'\n\n"
-                        f"--- CONTEXTO ---\n{context_text}\n\n"
-                        f"--- PERGUNTA DO USUÁRIO ---\n{prompt_user}\n\n"
-                        f"--- RESPOSTA ---"
+                        f"Você é o assistente virtual da Secretaria da UFG. Sua tarefa é responder perguntas acadêmicas baseando-se estritamente no CONTEXTO fornecido.\n\n"
+                        f"### EXEMPLO 1 DE RACIOCÍNIO ###\n"
+                        f"PERGUNTA: Quem decide sobre os casos omissos no Regimento?\n"
+                        f"RACIOCÍNIO: 1. Buscar sobre casos omissos. 2. No Artigo 195: 'Os casos omissos serão decididos pelo Reitor'.\n"
+                        f"RESPOSTA: Conforme o Art. 195, os casos omissos são decididos pelo Reitor, ouvidos os conselhos da administração central.\n\n"
+                        f"### EXEMPLO 2 DE RACIOCÍNIO ###\n"
+                        f"PERGUNTA: Qual o e-mail do Serviço de Atendimento ao Servidor – SAS/DAP?\n"
+                        f"RACIOCÍNIO: 1. Busca e-mail para atendimento SAS/DAP. 2. No Documento de Orientação para Admissão, está descrito para enviar exclusivamente para o email atendimento.dap@ufg.br'.\n"
+                        f"RESPOSTA: atendimento.dap@ufg.br\n\n"
+                        f"### EXECUÇÃO REAL ###\n"
+                        f"CONTEXTO:\n{context_text}\n\n"
+                        f"PERGUNTA DO USUÁRIO: {prompt_user}\n\n"
+                        f"Siga os passos: \n"
+                        f"1. Identifique a regra ou artigo no contexto.\n"
+                        f"2. Verifique se existem condições (prazos, documentos necessários).\n"
+                        f"3. Formule a resposta final.\n\n"
+                        f"RACIOCÍNIO:"
                     ),
                 }
 
