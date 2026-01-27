@@ -12,7 +12,7 @@ from transformers import (
     pipeline,
 )
 from datetime import datetime
-from github import Github, GithubException
+from github import Github, GithubException, Auth
 from sentence_transformers import SentenceTransformer
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -87,7 +87,8 @@ def get_questions_dataset_github():
     file_path = "set_perguntas_respostas.csv"
 
     try:
-        g = Github(token)
+        auth = Auth.Token(token)
+        g = Github(auth=auth)
         repo = g.get_repo(repo_name)
         contents = repo.get_contents(file_path)
         csv_content = contents.decoded_content.decode("utf-8")
@@ -217,14 +218,12 @@ def load_models(profile_name):
 
     model_name = params["llm"]
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+    model = AutoModelForSeq2SeqLM.from_pretrained(model_name, low_cpu_mem_usage=True)
 
-    pipe = pipeline(
-        "text2text-generation", model=model, tokenizer=tokenizer, device="cpu"
-    )
+    # pipe = pipeline("text2text-generation", model=model, tokenizer=tokenizer, device="cpu")
 
     embedding_dim = params["dim_value"]
-    return embed_model, pipe, embedding_dim
+    return embed_model, model, tokenizer, embedding_dim
 
 
 # ---------- 3. Sidebar & Upload ----------
@@ -255,9 +254,10 @@ with st.sidebar:
     st.sidebar.info("Os logs estão sendo salvos automaticamente no GitHub.")
 index_ready = False
 
-embed_model, gen_pipe, dim = load_models(selected_profile)
+embed_model, gen_model, gen_tokenizer, dim = load_models(selected_profile)
 st.session_state.embed_model = embed_model
-st.session_state.gen_pipe = gen_pipe
+st.session_state.gen_model = gen_model
+st.session_state.gen_tokenizer = gen_tokenizer
 st.session_state.dim = dim
 
 # with st.sidebar:
@@ -384,13 +384,19 @@ if index_ready:
                 }
 
                 try:
-                    output = gen_pipe(
-                        prompt_options[perfis[selected_profile]["prompt_technique"]],
+                    # output = gen_pipe(prompt_options[perfis[selected_profile]["prompt_technique"]], max_new_tokens=500, do_sample=False, truncation=True)
+                    # response_text = output[0]["generated_text"]
+                    input_prompt = prompt_options[perfis[selected_profile]["prompt_technique"]]
+                    inputs = gen_tokenizer(
+                        input_prompt, return_tensors="pt", truncation=True, max_length=512
+                    )
+                    output_tokens = gen_model.generate(
+                        **inputs,
                         max_new_tokens=500,
                         do_sample=False,
-                        truncation=True,
                     )
-                    response_text = output[0]["generated_text"]
+                    response_text = gen_tokenizer.decode(output_tokens[0], skip_special_tokens=True)
+
                 except Exception as e:
                     response_text = f"Desculpe, tive um erro interno: {str(e)}"
 
